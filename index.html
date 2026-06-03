@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4338ca">
+    <title>ViMech Aortic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4338ca;
+            --background-color: #f0f2f5;
+            --card-background: #f8f9fa;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+        }
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background-color);
+            overscroll-behavior: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #app {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            background-color: var(--card-background);
+            min-height: 100vh;
+            position: relative;
+        }
+        @media (max-width: 768px) {
+            #app { box-shadow: none; }
+            header { padding-top: env(safe-area-inset-top, 20px); }
+            main { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        }
+        @media (min-width: 769px) {
+            #app {
+                max-width: 1024px;
+                box-shadow: 0 0 30px rgba(0,0,0,0.1);
+                border-radius: 12px;
+                margin: 20px auto;
+                min-height: calc(100vh - 40px);
+            }
+            .desktop-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                gap: 20px;
+            }
+        }
+        .screen {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; flex-direction: column;
+        }
+        .screen.hidden {
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #main-screen.slide-out {
+            transform: translateX(-100%);
+        }
+        
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.visible { opacity: 1; pointer-events: all; }
+        .modal-content {
+            background-color: white; border-radius: 12px;
+            padding: 24px; width: 90%; max-width: 500px;
+            transform: scale(0.95); transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh;
+        }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+
+        .main-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .position-selector {
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .position-selector.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        .specs-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9em;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+            background: white;
+        }
+        .specs-table th {
+            background-color: var(--primary-color);
+            color: white;
+            text-align: left;
+            padding: 10px 12px;
+            font-weight: 600;
+        }
+        .specs-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .specs-table tr:nth-child(even) { background-color: #f9fafb; }
+        .specs-table tr:hover { background-color: #f3f4f6; }
+        
+        .best-candidate {
+            background-color: #d1fae5 !important;
+            font-weight: 600;
+        }
+        .best-candidate td {
+            color: #064e3b;
+        }
+
+        .subtype-selector.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        #vivor-results {
+            max-height: 45vh;
+            overflow-y: auto;
+        }
+        /* Estilos para las imágenes y vídeos integrados en los textos clínicos */
+        .inline-clinical-img {
+            max-height: 160px;
+            object-fit: contain;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .inline-clinical-img:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="relative overflow-hidden">
+        <div id="main-screen" class="screen w-full h-full">
+            <header class="bg-indigo-800 text-white p-5 shadow-lg lg:rounded-t-xl flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold" data-lang-key="main_title"></h1>
+                    <p class="text-sm md:text-base opacity-80 mt-1" data-lang-key="main_subtitle"></p>
+                </div>
+                <button id="options-menu-button" class="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-all duration-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+            </header>
+            <main class="p-4 md:p-6 main-content">
+                <div id="brand-list" class="lg:desktop-grid"></div>
+            </main>
+        </div>
+
+        <div id="detail-screen" class="screen hidden lg:rounded-xl"></div>
+    </div>
+
+    <div id="image-viewer" class="modal-overlay"><img id="viewer-img" src="" alt="Expanded view" class="max-w-[95%] max-h-[95%] object-contain rounded-lg"></div>
+    
+    <div id="options-menu" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="menu_title"></h2>
+            <div class="space-y-2">
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg" id="vivor-button" data-lang-key="menu_vivor"></button>
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg" id="lang-button" data-lang-key="menu_language"></button>
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg" id="about-button" data-lang-key="menu_about"></button>
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg" id="disclaimer-button" data-lang-key="menu_disclaimer"></button>
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg" id="contact-button" data-lang-key="menu_contact"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="language-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="language_title"></h2>
+            <div class="space-y-2">
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg lang-select-btn" data-lang="en">English</button>
+                <button class="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-lg lang-select-btn" data-lang="es">Español</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="about-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="about_title"></h2>
+            <p class="text-gray-600 overflow-y-auto" data-lang-key="about_content"></p>
+        </div>
+    </div>
+
+    <div id="disclaimer-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="disclaimer_title"></h2>
+            <p class="text-gray-600 overflow-y-auto" data-lang-key="disclaimer_content"></p>
+        </div>
+    </div>
+
+    <div id="contact-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="contact_title"></h2>
+            <p class="text-gray-600" data-lang-key="contact_content"></p>
+        </div>
+    </div>
+
+    <div id="vivor-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4" data-lang-key="vivor_title"></h2>
+            <div class="mb-4">
+                <label for="vivor-input" class="block text-sm font-medium text-gray-700 mb-1" data-lang-key="vivor_input_label"></label>
+                <input type="number" id="vivor-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="e.g., 21">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2" data-lang-key="vivor_position_label"></label>
+                <div class="flex gap-x-6">
+                    <label for="vivor-pos-aortic" class="flex items-center space-x-2 cursor-pointer">
+                        <input type="radio" id="vivor-pos-aortic" name="vivor-position" value="aortic" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" checked>
+                        <span class="text-sm text-gray-700" data-lang-key="aortic_valves"></span>
+                    </label>
+                    <label for="vivor-pos-mitral" class="flex items-center space-x-2 cursor-pointer">
+                        <input type="radio" id="vivor-pos-mitral" name="vivor-position" value="mitral" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                         <span class="text-sm text-gray-700" data-lang-key="mitral_valves"></span>
+                    </label>
+                </div>
+            </div>
+            <button id="vivor-calculate-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" data-lang-key="vivor_calculate"></button>
+            <div id="vivor-results" class="mt-6"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- INTERNATIONALIZATION (i18n) ---
+        const translations = {
+            en: {
+                main_title: "ViMech Aortic",
+                main_subtitle: "Reference for valve-in-valve procedure",
+                aortic_valves: "Aortic",
+                mitral_valves: "Mitral",
+                menu_title: "Options",
+                menu_vivor: "ViVor Estimate",
+                menu_language: "Language",
+                menu_about: "About",
+                menu_disclaimer: "Disclaimer & Copyright",
+                menu_contact: "Contact",
+                language_title: "Select Language",
+                about_title: "About this App",
+                about_content: "This application provides a quick reference guide for various mechanical heart valves. All data should be verified with official manufacturer documentation.<br><br><strong>Copyright Notice:</strong> All product names, trademarks, logos, and images used in this application are the property of their respective owners (e.g., Abbott, Medtronic, LivaNova, Artivion, etc.). They are used here strictly for educational, identification, and clinical reference purposes.",
+                disclaimer_title: "Disclaimer",
+                disclaimer_content: "This tool is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. The creators are not responsible for any errors or omissions.<br><br><strong>Non-Affiliation:</strong> This application is an independent educational tool. It is not affiliated with, endorsed by, sponsored by, or officially connected to any of the medical device manufacturers mentioned herein.",
+                contact_title: "Contact",
+                contact_content: "For questions or feedback, please reach out to the development team at hcuvicicor@gmail.com.",
+                details_images: "Main Images",
+                details_specs: "Technical Specifications",
+                fluoro_id: "Fluoroscopic Identification",
+                tavi_selection: "TAVI Size Selection",
+                positioning: "Positioning & Deployment",
+                tavi_size: "Size", tavi_myval: "Myval", tavi_s3: "S3", tavi_evolut: "Evolut", tavi_allegra: "Allegra", tavi_navitor: "Navitor", tavi_vitaflow: "Vitaflow",
+                vivor_title: "ViVor Estimate",
+                vivor_input_label: "Enter surgical valve true internal diameter (mm):",
+                vivor_position_label: "Position:",
+                vivor_calculate: "Calculate",
+                vivor_results_title: "Suitable Valves for ViVor",
+                vivor_no_results: "No suitable bileaflet valves found.",
+                header_size: "Size (mm)", header_tad: "Tissue Annulus Dia. (mm)", header_goa: "Geometric Orifice Area (cm²)", header_ih: "Implant Height (mm)", header_oho: "Open Height Overall (mm)", header_cod: "Cuff Outer Dia. (mm)", header_model: "Model", header_iph: "Inflow Profile Height (mm)", header_oph: "Outflow Profile Height (mm)", header_id: "Internal Dia. (mm)", header_od: "Outer Dia. (mm)", header_oa: "Orifice Area (cm²)", header_brand: "Brand", header_position: "Position"
+            },
+            es: {
+                main_title: "ViMech Aortic",
+                main_subtitle: "Referencia para procedimientos valve-in-valve",
+                aortic_valves: "Aórticas",
+                mitral_valves: "Mitrales",
+                menu_title: "Opciones",
+                menu_vivor: "Estimar ViVor",
+                menu_language: "Idioma",
+                menu_about: "Acerca de",
+                menu_disclaimer: "Descargo Legal y Copyright",
+                menu_contact: "Contacto",
+                language_title: "Seleccionar Idioma",
+                about_title: "Acerca de esta App",
+                about_content: "Esta aplicación proporciona una guía de referencia rápida para diversas válvulas cardíacas mecánicas. Todos los datos deben ser verificados con la documentación oficial del fabricante.<br><br><strong>Aviso de Copyright:</strong> Todos los nombres de productos, marcas comerciales, logotipos e imágenes utilizados en esta aplicación son propiedad de sus respectivos dueños (ej. Abbott, Medtronic, LivaNova, Artivion, etc.). Se utilizan aquí estrictamente con fines educativos, de identificación y referencia clínica.",
+                disclaimer_title: "Descargo de Responsabilidad",
+                disclaimer_content: "Esta herramienta es solo para fines informativos y no sustituye el consejo, diagnóstico o tratamiento médico profesional. Los creadores no se hacen responsables de errores u omisiones.<br><br><strong>No Afiliación:</strong> Esta aplicación es una herramienta educativa independiente. No está afiliada, respaldada, patrocinada ni conectada oficialmente con ninguno de los fabricantes de dispositivos médicos aquí mencionados.",
+                contact_title: "Contacto",
+                contact_content: "Para preguntas o sugerencias, contacte al equipo de desarrollo en hcuvicicor@gmail.com.",
+                details_images: "Imágenes Principales",
+                details_specs: "Especificaciones Técnicas",
+                fluoro_id: "Identificación Fluoroscópica",
+                tavi_selection: "Selección de Tamaño TAVI",
+                positioning: "Posicionamiento y Despliegue",
+                tavi_size: "Tamaño", tavi_myval: "Myval", tavi_s3: "S3", tavi_evolut: "Evolut", tavi_allegra: "Allegra", tavi_navitor: "Navitor", tavi_vitaflow: "Vitaflow",
+                vivor_title: "Estimación ViVor",
+                vivor_input_label: "Introduzca el diámetro interno real (mm):",
+                vivor_position_label: "Posición:",
+                vivor_calculate: "Calcular",
+                vivor_results_title: "Válvulas Aptas para ViVor",
+                vivor_no_results: "No se encontraron válvulas bidisco adecuadas.",
+                header_size: "Tamaño (mm)", header_tad: "Diám. Anillo Tisular (mm)", header_goa: "Área Orificio Geom. (cm²)", header_ih: "Altura Implante (mm)", header_oho: "Altura Total Abierta (mm)", header_cod: "Diám. Ext. Manguito (mm)", header_model: "Modelo", header_iph: "Perfil Flujo Ent. (mm)", header_oph: "Altura Flujo Sal. (mm)", header_id: "Diám. Interno (mm)", header_od: "Diám. Externo (mm)", header_oa: "Área Orificio (cm²)", header_brand: "Marca", header_position: "Posición"
+            }
+        };
+
+        // Bloques de texto reutilizables
+        const positioning_SJM_CM = {
+            en: ["Avoid rapid pacing to allow disc to embolise to aortic side.", "With BE valve: Target position: 80/20 Aortic/ventricular.", "With SE valve: Target depth upto 3mm into the ventricle."],
+            es: ["Evite marcapasos rápido para permitir que el disco embolice hacia el lado aórtico.", "Con válvula BE: Posición objetivo 80/20 Aórtico/ventricular.", "Con válvula SE: Profundidad objetivo de hasta 3mm en el ventrículo."]
+        };
+        const positioning_General = {
+            en: ["With BE valve: Target position: 80/20 Aortic/ventricular.", "With SE valve: Target depth upto 3mm into the ventricle."],
+            es: ["Con válvula BE: Posición objetivo 80/20 Aórtico/ventricular.", "Con válvula SE: Profundidad objetivo de hasta 3mm en el ventrículo."]
+        };
+
+        const valvesData = [
+            {
+                id: 'sjm', name: 'SJM', manufacturer: 'Abbott (St. Jude Medical)',
+                positions: {
+                    aortic: [
+                        {
+                            subtypeName: {en: 'SJM Regent - Standard Cuff', es: 'SJM Regent - Manguito Estándar'},
+                            images: { main: 'assets/SJM%20Regent/SJM_regent_standardcuff.png' },
+                            fluoroscopyDesc: {
+                                en: ["Ring is not radiopaque (most distinguishable feature).", "Only the discs are seen, moving like 'butterfly wings' in the side view."],
+                                es: ["El anillo no es radiopaco (característica más distintiva).", "Solo se ven los discos, moviéndose como 'alas de mariposa' en la vista lateral."]
+                            },
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['assets/SJM%20Regent/BEV_sjm_video2.mp4', 'https://placehold.co/400x300/a3e635/000000?text=IMAGE+3'],
+                            specs: [ { size: 17, tad: 17, goa: 1.9, ih: 6.1, oho: 11.6, cod: 24.7 }, { size: 19, tad: 19, goa: 2.4, ih: 6.1, oho: 11.6, cod: 24.7 }, { size: 21, tad: 21, goa: 2.9, ih: 7.3, oho: 13.0, cod: 26.7 }, { size: 23, tad: 23, goa: 3.5, ih: 8.0, oho: 14.3, cod: 28.7 }, { size: 25, tad: 25, goa: 4.0, ih: 8.2, oho: 14.6, cod: 30.7 }, { size: 27, tad: 27, goa: 4.7, ih: 9.1, oho: 15.4, cod: 32.7 } ],
+                            taviTable: [
+                                { size: '17', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '25', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '27', myval: '24.5/26', s3: '26', evolut: '29', allegra: '31', navitor: '27', vitaflow: '27' }
+                            ]
+                        },
+                        {
+                            subtypeName: {en: 'SJM Regent - FlexCuff', es: 'SJM Regent - FlexCuff'},
+                            images: { main: 'assets/SJM%20Regent/SJM_regent_flexcuff.png' },
+                            fluoroscopyDesc: {
+                                en: ["Ring is not radiopaque (most distinguishable feature).", "Only the discs are seen, moving like 'butterfly wings' in the side view."],
+                                es: ["El anillo no es radiopaco (característica más distintiva).", "Solo se ven los discos, moviéndose como 'alas de mariposa' en la vista lateral."]
+                            },
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+2', 'https://placehold.co/400x300/a3e635/000000?text=IMAGE+3'],
+                            specs: [ { size: 17, tad: 17, goa: 1.9, ih: 6.1, oho: 11.6, cod: 24.7 }, { size: 19, tad: 19, goa: 2.4, ih: 6.1, oho: 11.6, cod: 27.0 }, { size: 21, tad: 21, goa: 2.9, ih: 7.3, oho: 13.0, cod: 29.0 }, { size: 23, tad: 23, goa: 3.5, ih: 8.0, oho: 14.3, cod: 31.0 }, { size: 25, tad: 25, goa: 4.0, ih: 8.2, oho: 14.6, cod: 33.0 }, { size: 27, tad: 27, goa: 4.7, ih: 9.1, oho: 15.4, cod: 35.0 } ],
+                            taviTable: [
+                                { size: '17', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '25', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '27', myval: '24.5/26', s3: '26', evolut: '29', allegra: '31', navitor: '27', vitaflow: '27' }
+                            ]
+                        },
+                        {
+                            subtypeName: {en: 'SJM Masters - HP Series', es: 'SJM Masters - Serie HP'},
+                            images: { main: 'assets/SJM%20Regent/SJM_masters_expandedcuff.png' },
+                            fluoroscopyDesc: {
+                                en: ["Have a radiopaque ring.", "Disks remain suspended further away from the ring's plane because in contrast to other bileaflet valves it has a higher pivotal point."],
+                                es: ["Tienen un anillo radiopaco.", "Los discos permanecen suspendidos más lejos del plano del anillo porque, a diferencia de otras válvulas bivalvas, tiene un punto de pivote más alto."]
+                            },
+                            fluoroscopyImages: ['assets/SJM%20Regent/sjm_video1.mp4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['assets/SJM%20Regent/BEV_sjm_video2.mp4', 'assets/SJM%20Regent/SEV_sjm_video1.mp4','assets/SJM%20Regent/SEV_sjm_video2.mp4'],
+                            specs: [ { size: 17, tad: 17, goa: 1.6, ih: 4.6, oho: 9.8 }, { size: 19, tad: 19, goa: 2.1, ih: 5.2, oho: 10.6 }, { size: 21, tad: 21, goa: 2.6, ih: 6.0, oho: 12.1 }, { size: 23, tad: 23, goa: 3.1, ih: 6.2, oho: 13.3 }, { size: 25, tad: 25, goa: 3.8, ih: 6.7, oho: 13.9 }, { size: 27, tad: 27, goa: 4.4, ih: 7.5, oho: 14.6 } ],
+                            taviTable: [
+                                { size: '17', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23 (Caution)', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: '20/21.5 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: '23 (Caution)', vitaflow: '21' },
+                                { size: '23', myval: '20/21.5', s3: '20', evolut: '23/26', allegra: '23', navitor: '23', vitaflow: '21/24' },
+                                { size: '25', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '27', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' }
+                            ]
+                        },
+                        {
+                            subtypeName: {en: 'SJM Masters - Polyester Cuff', es: 'SJM Masters - Manguito Poliéster'},
+                            images: { main: 'assets/SJM%20Regent/SJM_master_standardcuff.png' },
+                            fluoroscopyDesc: {
+                                en: ["Have a radiopaque ring.", "Disks remain suspended further away from the ring's plane because in contrast to other bileaflet valves it has a higher pivotal point."],
+                                es: ["Tienen un anillo radiopaco.", "Los discos permanecen suspendidos más lejos del plano del anillo porque, a diferencia de otras válvulas bivalvas, tiene un punto de pivote más alto."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+1'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+2', 'https://placehold.co/400x300/a3e635/000000?text=IMAGE+3'],
+                            specs: [ { size: 19, tad: 19, goa: 1.6, ih: 3.5, oho: 9.8 }, { size: 21, tad: 21, goa: 2.1, ih: 3.9, oho: 10.6 }, { size: 23, tad: 23, goa: 2.6, ih: 5.2, oho: 12.1 }, { size: 25, tad: 25, goa: 3.1, ih: 5.5, oho: 13.3 }, { size: 27, tad: 27, goa: 3.8, ih: 5.8, oho: 13.9 }, { size: 29, tad: 29, goa: 4.4, ih: 6.5, oho: 14.6 }, { size: 31, tad: 31, goa: 5.1, ih: 7.3, oho: 16.0 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23 (Caution)', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20/21.5 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: '23 (Caution)', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '23/26', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '29', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' },
+                                { size: '31', myval: '26/27.5', s3: '26', evolut: '29', allegra: '31', navitor: '29', vitaflow: '27' }
+                            ]
+                        },
+                         {
+                            subtypeName: {en: 'SJM Masters - PTFE Cuff', es: 'SJM Masters - Manguito PTFE'},
+                            images: { main: 'assets/SJM%20Regent/SJM_master_standardcuff.png' },
+                            fluoroscopyDesc: {
+                                en: ["Have a radiopaque ring.", "Disks remain suspended further away from the ring's plane because in contrast to other bileaflet valves it has a higher pivotal point."],
+                                es: ["Tienen un anillo radiopaco.", "Los discos permanecen suspendidos más lejos del plano del anillo porque, a diferencia de otras válvulas bivalvas, tiene un punto de pivote más alto."]
+                            },
+                            fluoroscopyImages: ['assets/SJM%20Regent/sjm_video1.mp4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+2', 'https://placehold.co/400x300/a3e635/000000?text=IMAGE+3'],
+                            specs: [ { size: 19, tad: 19, goa: 1.6, ih: 3.5, oho: 9.8 }, { size: 21, tad: 21, goa: 2.1, ih: 3.9, oho: 10.6 }, { size: 23, tad: 23, goa: 2.6, ih: 5.2, oho: 12.1 }, { size: 25, tad: 25, goa: 3.1, ih: 5.5, oho: 13.3 }, { size: 27, tad: 27, goa: 3.8, ih: 5.8, oho: 13.9 }, { size: 29, tad: 29, goa: 4.4, ih: 6.5, oho: 14.6 }, { size: 31, tad: 31, goa: 5.1, ih: 7.3, oho: 16.0 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23 (Caution)', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20/21.5 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: '23 (Caution)', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '23/26', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '29', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' },
+                                { size: '31', myval: '26/27.5', s3: '26', evolut: '29', allegra: '31', navitor: '29', vitaflow: '27' }
+                            ]
+                        }
+                    ],
+                    mitral: [ 
+                        { subtypeName: {en: 'SJM Masters - Standard', es: 'SJM Masters - Estándar'}, images: { main: 'https://placehold.co/600x400/c7d2fe/333333?text=SJM+Masters'}, specs: [ { size: 25, tad: 25, goa: 4.0 }, { size: 27, tad: 27, goa: 4.7 } ] } 
+                    ]
+                }
+            },
+            {
+                id: 'carbomedics', name: 'CarboMedics', manufacturer: 'CarboMedics (LivaNova)',
+                positions: {
+                    aortic: [
+                        { 
+                            subtypeName: { en: 'Standard Aortic', es: 'Aórtica Estándar' }, 
+                            images: { main: 'assets/CarboMedics/Carbomedics_standard_main.png' },
+                            fluoroscopyDesc: {
+                                en: ["Has a titanium housing ring which is reinforced with another titanium ring with greater radiopacity which allows rotation of the valve for optimal orientation after implantation.", "The cavitied pivot area is embedded inside a pyrolytic carbon housing into which the valve hinges are recessed.", "Edge-to-edge diameter is longer than the hinge-to-hinge diameter because this pivot design impairs the circular composition of the valvular orifice."],
+                                es: ["Tiene un anillo de alojamiento de titanio reforzado con otro anillo de titanio de mayor radiopacidad que permite la rotación de la válvula para una orientación óptima tras la implantación.", "El área de pivote cavitada está incrustada dentro de una carcasa de carbón pirolítico en la que se alojan las bisagras de la válvula.", "El diámetro de borde a borde es mayor que el diámetro de bisagra a bisagra porque este diseño de pivote altera la composición circular del orificio valvular."]
+                            },
+                            fluoroscopyImages: ['assets/CarboMedics/imagen4_Multimedia1.mp4',
+												'assets/CarboMedics/imagen4_Multimedia2.mp4',
+			    								'assets/CarboMedics/imagen4_Multimedia3.mp4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['assets/CarboMedics/imagen5_Multimedia1_rec.mp4'],
+                            specs: [ { size: 19, tad: 18.8, id: 14.7, oho: 6.2, goa: 1.59, model: 'RS-019' }, { size: 21, tad: 20.8, id: 16.7, oho: 6.6, goa: 2.07, model: 'RS-021' }, { size: 23, tad: 22.6, id: 18.5, oho: 7.3, goa: 2.56, model: 'RS-023' }, { size: 25, tad: 25.0, id: 20.5, oho: 7.7, goa: 3.16, model: 'RS-025' }, { size: 27, tad: 27.0, id: 22.5, oho: 8.4, goa: 3.84, model: 'RS-027' }, { size: 29, tad: 29.0, id: 24.2, oho: 8.7, goa: 4.44, model: 'RS-029' } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '29', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Reduced Aortic', es: 'Aórtica Reducida' }, 
+                            images: { main: 'assets/CarboMedics/Carbomedics_reduced_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Has a titanium housing ring which is reinforced with another titanium ring with greater radiopacity which allows rotation of the valve for optimal orientation after implantation.", "The cavitied pivot area is embedded inside a pyrolytic carbon housing into which the valve hinges are recessed.", "Edge-to-edge diameter is longer than the hinge-to-hinge diameter because this pivot design impairs the circular composition of the valvular orifice."],
+                                es: ["Tiene un anillo de alojamiento de titanio reforzado con otro anillo de titanio de mayor radiopacidad que permite la rotación de la válvula para una orientación óptima tras la implantación.", "El área de pivote cavitada está incrustada dentro de una carcasa de carbón pirolítico en la que se alojan las bisagras de la válvula.", "El diámetro de borde a borde es mayor que el diámetro de bisagra a bisagra porque este diseño de pivote altera la composición circular del orificio valvular."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+5'],
+                            specs: [ { size: 19, tad: 18.8, id: 14.7, oho: 6.2, goa: 1.59, model: 'AS-019' }, { size: 21, tad: 20.8, id: 16.7, oho: 6.6, goa: 2.07, model: 'AS-021' }, { size: 23, tad: 22.6, id: 18.5, oho: 7.3, goa: 2.56, model: 'AS-023' }, { size: 25, tad: 25.0, id: 20.5, oho: 7.7, goa: 3.16, model: 'AS-025' }, { size: 27, tad: 27.0, id: 22.5, oho: 8.4, goa: 3.84, model: 'AS-027' }, { size: 29, tad: 29.0, id: 24.2, oho: 8.7, goa: 4.44, model: 'AS-029' }, { size: 31, tad: 31.0, id: 26.2, oho: 8.7, goa: 4.44, model: 'AS-031' } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '29', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' },
+                                { size: '31', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Top Hat Aortic (Supra-annular)', es: 'Aórtica Top Hat (Supra-anular)' }, 
+                            images: { main: 'assets/CarboMedics/Carbomedics_tophat_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Has a titanium housing ring which is reinforced with another titanium ring with greater radiopacity which allows rotation of the valve for optimal orientation after implantation.", "The cavitied pivot area is embedded inside a pyrolytic carbon housing into which the valve hinges are recessed.", "Edge-to-edge diameter is longer than the hinge-to-hinge diameter because this pivot design impairs the circular composition of the valvular orifice."],
+                                es: ["Tiene un anillo de alojamiento de titanio reforzado con otro anillo de titanio de mayor radiopacidad que permite la rotación de la válvula para una orientación óptima tras la implantación.", "El área de pivote cavitada está incrustada dentro de una carcasa de carbón pirolítico en la que se alojan las bisagras de la válvula.", "El diámetro de borde a borde es mayor que el diámetro de bisagra a bisagra porque este diseño de pivote altera la composición circular del orificio valvular."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+5'],
+                            specs: [ { size: 19, tad: 19.0, id: 14.7, oho: 6.2, goa: 1.59, model: 'TS-019' }, { size: 21, tad: 21.0, id: 16.7, oho: 6.5, goa: 2.07, model: 'TS-021' }, { size: 23, tad: 23.0, id: 18.5, oho: 7.3, goa: 2.56, model: 'TS-023' }, { size: 25, tad: 25.0, id: 20.5, oho: 7.7, goa: 3.16, model: 'TS-025' }, { size: 27, tad: 27.0, id: 22.5, oho: 8.4, goa: 3.84, model: 'TS-027' } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Orbis Aortic', es: 'Aórtica Orbis' }, 
+                            images: { main: 'assets/CarboMedics/Carbomedics_orbis_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Has a titanium housing ring which is reinforced with another titanium ring with greater radiopacity which allows rotation of the valve for optimal orientation after implantation.", "The cavitied pivot area is embedded inside a pyrolytic carbon housing into which the valve hinges are recessed.", "Edge-to-edge diameter is longer than the hinge-to-hinge diameter because this pivot design impairs the circular composition of the valvular orifice."],
+                                es: ["Tiene un anillo de alojamiento de titanio reforzado con otro anillo de titanio de mayor radiopacidad que permite la rotación de la válvula para una orientación óptima tras la implantación.", "El área de pivote cavitada está incrustada dentro de una carcasa de carbón pirolítico en la que se alojan las bisagras de la válvula.", "El diámetro de borde a borde es mayor que el diámetro de bisagra a bisagra porque este diseño de pivote altera la composición circular del orificio valvular."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+4'],
+                            positioning: positioning_SJM_CM,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+5'],
+                            specs: [ { size: 19, tad: 19.0, id: 14.7, oho: 6.2, goa: 1.59, model: 'A1-019' }, { size: 21, tad: 21.0, id: 16.7, oho: 6.5, goa: 2.07, model: 'A1-021' }, { size: 23, tad: 23.0, id: 18.5, oho: 7.3, goa: 2.56, model: 'A1-023' }, { size: 25, tad: 25.0, id: 20.5, oho: 7.7, goa: 3.16, model: 'A1-025' }, { size: 27, tad: 27.0, id: 22.5, oho: 8.4, goa: 3.84, model: 'A1-027' }, { size: 29, tad: 29.0, id: 24.2, oho: 8.7, goa: 4.44, model: 'A1-029' }, { size: 31, tad: 31.0, id: 24.2, oho: 8.7, goa: 4.44, model: 'A1-031' } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20 (Caution)', s3: '20 (Caution)', evolut: '23', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24' },
+                                { size: '29', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' },
+                                { size: '31', myval: '24.5', s3: '26', evolut: '29', allegra: '27', navitor: '27', vitaflow: '27' }
+                            ]
+                        }
+                    ],
+                    mitral: [ 
+                        { subtypeName: {en: 'Standard Mitral', es: 'Mitral Estándar'}, images: { main: 'assets/CarboMedics/Carbomedics_standard_mitral_main.png'}, specs: [ { size: 25, tad: 25, goa: 4.0, id: 21.0 }, { size: 27, tad: 27, goa: 4.7, id: 23.0 } ] },
+                        { subtypeName: {en: 'Optiform Mitral', es: 'Mitral Optiform'}, images: { main: 'assets/CarboMedics/Carbomedics_optiform_mitral_main.png'}, specs: [ { size: 23, tad: 23, goa: 3.8, id: 19.0 }, { size: 25, tad: 25, goa: 4.5, id: 21.0 }, { size: 27, tad: 27, goa: 5.3, id: 23.0 }, { size: 29, tad: 29, goa: 6.2, id: 25.0 }, { size: 31, tad: 31, goa: 7.2, id: 27.0 }, { size: 33, tad: 33, goa: 8.3, id: 29.0 } ] },
+                        { subtypeName: {en: 'Orbis Mitral', es: 'Mitral Orbis'}, images: { main: 'assets/CarboMedics/Carbomedics_orbis_mitral_main.png'}, specs: [ { size: 23, tad: 23, goa: 3.8, id: 19.0 }, { size: 25, tad: 25, goa: 4.5, id: 21.0 }, { size: 27, tad: 27, goa: 5.3, id: 23.0 }, { size: 29, tad: 29, goa: 6.2, id: 25.0 }, { size: 31, tad: 31, goa: 7.2, id: 27.0 }, { size: 33, tad: 33, goa: 8.3, id: 29.0 } ] }
+                    ]
+                }
+            },
+            {
+                id: 'medtronic-ats', name: 'Medtronic (ATS)', manufacturer: 'Medtronic',
+                positions: {
+                    aortic: [
+                        { 
+                            subtypeName: { en: 'Medtronic Standard Aortic (Intra-annular)', es: 'Medtronic Aórtica Estándar (Intra-anular)' }, 
+                            images: { main: 'assets/ats_openpivot/Imagen6_openpivot_standard.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Appearance similar to that of the carbomedics with a few differences.", "Leaflets have increased visibility due to high tungsten content of the disk substrate.", "Flat titanium ring profile of the ATS valve: similar to those of some CM models; however, the titanium rotation ring has greater radiopacity."],
+                                es: ["Apariencia similar a la de carbomedics con algunas diferencias.", "Las valvas tienen mayor visibilidad debido al alto contenido de tungsteno del sustrato del disco.", "Perfil de anillo de titanio plano de la válvula ATS: similar al de algunos modelos CM; sin embargo, el anillo de rotación de titanio tiene mayor radiopacidad."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+6'],
+                            positioning: positioning_General,
+                            specs: [ { size: 19, model: '500FA19', tad: 19.2, id: 14.8 }, { size: 21, model: '500FA21', tad: 21.2, id: 16.8 }, { size: 23, model: '500FA23', tad: 23.2, id: 18.8 }, { size: 25, model: '500FA25', tad: 25.2, id: 20.8 }, { size: 27, model: '500FA27', tad: 27.2, id: 22.8 }, { size: 29, model: '500FA29', tad: 29.2, id: 24.8 }, { size: 31, model: '500FA31', tad: 31.2, id: 26.8 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '23', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '25', myval: '20/21.5', s3: '20/23', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '27', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24/26' },
+                                { size: '29', myval: '24.5/26', s3: '26', evolut: '29', allegra: '31', navitor: '27', vitaflow: '27' },
+                                { size: '31', myval: '27.5', s3: '29', evolut: '34', allegra: '31', navitor: '29', vitaflow: '30' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Medtronic AP360 Aortic', es: 'Medtronic Aórtica AP360' }, 
+                            images: { main: 'assets/ats_openpivot/Imagen6_openpivot_ap360.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Appearance similar to that of the carbomedics with a few differences.", "Leaflets have increased visibility due to high tungsten content of the disk substrate.", "Flat titanium ring profile of the ATS valve: similar to those of some CM models; however, the titanium rotation ring has greater radiopacity."],
+                                es: ["Apariencia similar a la de carbomedics con algunas diferencias.", "Las valvas tienen mayor visibilidad debido al alto contenido de tungsteno del sustrato del disco.", "Perfil de anillo de titanio plano de la válvula ATS: similar al de algunos modelos CM; sin embargo, el anillo de rotación de titanio tiene mayor radiopacidad."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+6'],
+                            positioning: positioning_General,
+                            specs: [ { size: 16, model: '505DA16', tad: 16.2, id: 14.8 }, { size: 18, model: '505DA18', tad: 18.2, id: 16.8 }, { size: 20, model: '505DA20', tad: 20.2, id: 18.8 }, { size: 22, model: '505DA22', tad: 22.2, id: 20.8 }, { size: 24, model: '505DA24', tad: 24.2, id: 22.8 }, { size: 26, model: '505DA26', tad: 26.2, id: 24.8 }, { size: 28, model: '505DA28', tad: 28.2, id: 26.8 } ],
+                            taviTable: [
+                                { size: '16', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '18', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '20', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '22', myval: '20/21.5', s3: '20/23', evolut: '26', allegra: '23', navitor: '23', vitaflow: '24' },
+                                { size: '24', myval: '23', s3: '23', evolut: '26', allegra: '27', navitor: '25', vitaflow: '24/27' },
+                                { size: '26', myval: '24.5/26', s3: '26', evolut: '29', allegra: '31', navitor: '27', vitaflow: '27' },
+                                { size: '28', myval: '27.5', s3: '29', evolut: '34', allegra: '31', navitor: '29', vitaflow: '30' }
+                            ]
+                        }
+                    ],
+                    mitral: [ { subtypeName: {en: 'ATS Mitral Standard', es: 'ATS Mitral Estándar'}, images: { main: 'https://placehold.co/600x400/c7d2fe/333333?text=ATS+Mitral'}, specs: [ { size: 25, tad: 25, oa: 4.1, id: 21.0 }, { size: 27, tad: 27, oa: 4.9, id: 23.0 } ] } ]
+                }
+            },
+            {
+                id: 'onx', name: 'On-X', manufacturer: 'On-X Life Technologies (CryoLife)',
+                positions: {
+                    aortic: [
+                        { 
+                            subtypeName: { en: 'Conform-X', es: 'Conform-X' }, 
+                            images: { main: 'assets/On-X/on-x%20aortic.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["Orifice: composed of graphite substrate coated with On-X® Carbon (a pure unalloyed form of pyrolytic carbon).", "Leaflets: consist of On-X® Carbon deposited on a graphite substrate, which is impregnated with 10 weight% tungsten to provide radiopacity."],
+                                es: ["Orificio: compuesto por un sustrato de grafito recubierto con Carbón On-X® (una forma pura no aleada de carbón pirolítico).", "Valvas: consisten en Carbón On-X® depositado sobre un sustrato de grafito, impregnado con un 10% en peso de tungsteno para proporcionar radiopacidad."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+7'],
+                            positioning: positioning_General,
+                            specs: [ { size: 19, model: 'ONXACE 19*', tad: 19.6, id: 17.4, cod: 27, ih: 10.8, oho: 13.3, oa: 2.28 }, { size: 21, model: 'ONXACE 21*', tad: 21.4, id: 19.4, cod: 30, ih: 11.9, oho: 14.7, oa: 2.84 }, { size: 23, model: 'ONXACE 23*', tad: 23.4, id: 21.4, cod: 33, ih: 13.1, oho: 16.1, oa: 3.44 }, { size: 25, model: 'ONXACE 25*', tad: 25.4, id: 23.4, cod: 36, ih: 14.2, oho: 17.0, oa: 4.11 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '23/27', navitor: '23/25', vitaflow: '24' },
+                                { size: '25', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '27', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '29', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Anatomic', es: 'Anatomic' }, 
+                            images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=On-X+Anatomic' }, 
+                            fluoroscopyDesc: {
+                                en: ["Orifice: composed of graphite substrate coated with On-X® Carbon (a pure unalloyed form of pyrolytic carbon).", "Leaflets: consist of On-X® Carbon deposited on a graphite substrate, which is impregnated with 10 weight% tungsten to provide radiopacity."],
+                                es: ["Orificio: compuesto por un sustrato de grafito recubierto con Carbón On-X® (una forma pura no aleada de carbón pirolítico).", "Valvas: consisten en Carbón On-X® depositado sobre un sustrato de grafito, impregnado con un 10% en peso de tungsteno para proporcionar radiopacidad."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+7'],
+                            positioning: positioning_General,
+                            specs: [ { size: 19, model: 'ONXAAE 19', tad: 19.6, id: 17.4, cod: 27, ih: 10.8, oho: 13.3, oa: 2.28 }, { size: 21, model: 'ONXAAE 21', tad: 21.4, id: 19.4, cod: 30, ih: 11.9, oho: 14.7, oa: 2.84 }, { size: 23, model: 'ONXAAE 23', tad: 23.4, id: 21.4, cod: 33, ih: 13.1, oho: 16.1, oa: 3.44 }, { size: 25, model: 'ONXAAE 25', tad: 25.4, id: 23.4, cod: 36, ih: 14.2, oho: 17.0, oa: 4.11 }, { size: '27/29', model: 'ONXAAE 27/29', tad: 29.4, id: 25.4, cod: 34, ih: 14.2, oho: 17.0, oa: 4.11 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '23/27', navitor: '23/25', vitaflow: '24' },
+                                { size: '25', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '27', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '29', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Standard', es: 'Estándar' }, 
+                            images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=On-X+Standard' }, 
+                            fluoroscopyDesc: {
+                                en: ["Orifice: composed of graphite substrate coated with On-X® Carbon (a pure unalloyed form of pyrolytic carbon).", "Leaflets: consist of On-X® Carbon deposited on a graphite substrate, which is impregnated with 10 weight% tungsten to provide radiopacity."],
+                                es: ["Orificio: compuesto por un sustrato de grafito recubierto con Carbón On-X® (una forma pura no aleada de carbón pirolítico).", "Valvas: consisten en Carbón On-X® depositado sobre un sustrato de grafito, impregnado con un 10% en peso de tungsteno para proporcionar radiopacidad."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+7'],
+                            positioning: positioning_General,
+                            specs: [ { size: 19, model: 'ONXAE-19', tad: 19.6, id: 17.4, cod: 23, ih: 10.8, oho: 13.3, oa: 2.28 }, { size: 21, model: 'ONXAE-21', tad: 21.4, id: 19.4, cod: 26, ih: 11.9, oho: 14.7, oa: 2.84 }, { size: 23, model: 'ONXAE-23', tad: 23.4, id: 21.4, cod: 29, ih: 13.1, oho: 16.1, oa: 3.44 }, { size: 25, model: 'ONXAE-25', tad: 25.4, id: 23.4, cod: 32, ih: 14.2, oho: 17.8, oa: 4.11 }, { size: '27/29', model: 'ONXAE-27/29', tad: 29.4, id: 25.4, cod: 34, ih: 14.2, oho: 17.8, oa: 4.11 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '23/27', navitor: '23/25', vitaflow: '24' },
+                                { size: '25', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '27', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '29', myval: '23/24.5', s3: '23', evolut: '26/29', allegra: '27', navitor: '25/27', vitaflow: '24/27' }
+                            ]
+                        }
+                    ],
+                    mitral: [ { subtypeName: {en: 'On-X Mitral', es: 'On-X Mitral'}, images: { main: 'assets/On-X/on-x%20mitral.png'}, specs: [ { size: 25, model: 'ONXMCE 25', tad: 25.4, id: 23.4, cod: 36, ih: 14.2, oho: 17.0, oa: 4.11 } ] } ]
+                }
+            },
+            {
+                id: 'bicarbon', name: 'Bicarbon', manufacturer: 'Sorin (LivaNova)',
+                positions: {
+                    aortic: [
+                        { 
+                            subtypeName: { en: 'Overline Aortic', es: 'Aórtica Overline' }, 
+                            images: { main: 'assets/Bicarbon/bicarbon_overline_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["The ring and leaflets are radiopaque.", "Frontal view: its distinctive characteristic is a curved profile (which separates the valve orifice in three equivalent sections).", "Side view: Pathognomonic hazy appearance of the curved leaflets."],
+                                es: ["El anillo y las valvas son radiopacos.", "Vista frontal: su característica distintiva es un perfil curvo (que separa el orificio de la válvula en tres secciones equivalentes).", "Vista lateral: Apariencia nebulosa patognomónica de las valvas curvas."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+8'],
+                            positioning: positioning_General,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+9'],
+                            specs: [ { size: 18, model: 'ICV0506', tad: 17.2, id: 13.0, oho: 6.0, goa: 1.24 }, { size: 20, model: 'ICV0508', tad: 19.2, id: 15.0, oho: 6.8, goa: 1.63 }, { size: 22, model: 'ICV0510', tad: 21.5, id: 17.0, oho: 7.2, goa: 2.15 }, { size: 24, model: 'ICV0512', tad: 23.5, id: 19.0, oho: 7.6, goa: 2.70 } ],
+                            taviTable: [
+                                { size: '16', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '18', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '20', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '22', myval: '21.5', s3: '23', evolut: '26', allegra: '23', navitor: '25', vitaflow: '24' },
+                                { size: '24', myval: '23/24.5', s3: '23', evolut: '26', allegra: '27', navitor: '25/27', vitaflow: '24/27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Slimline Aortic', es: 'Aórtica Slimline' }, 
+                            images: { main: 'assets/Bicarbon/bicarbon_slimline_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["The ring and leaflets are radiopaque.", "Frontal view: its distinctive characteristic is a curved profile (which separates the valve orifice in three equivalent sections).", "Side view: Pathognomonic hazy appearance of the curved leaflets."],
+                                es: ["El anillo y las valvas son radiopacos.", "Vista frontal: su característica distintiva es un perfil curvo (que separa el orificio de la válvula en tres secciones equivalentes).", "Vista lateral: Apariencia nebulosa patognomónica de las valvas curvas."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+8'],
+                            positioning: positioning_General,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+9'],
+                            specs: [ { size: 17, model: 'ICV0636', tad: 17.2, id: 13.0, oho: 6.0, goa: 1.24 }, { size: 19, model: 'ICV0638', tad: 19.2, id: 15.0, oho: 6.8, goa: 1.63 }, { size: 21, model: 'ICV0640', tad: 21.5, id: 17.0, oho: 7.2, goa: 2.15 }, { size: 23, model: 'ICV0642', tad: 23.5, id: 19.0, oho: 7.6, goa: 2.70 }, { size: 25, model: 'ICV0644', tad: 25.0, id: 20.5, oho: 8.0, goa: 3.16 }, { size: 27, model: 'ICV0646', tad: 27.0, id: 22.5, oho: 8.6, goa: 3.82 } ],
+                            taviTable: [
+                                { size: '17', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '21', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '23', myval: '21.5', s3: '23', evolut: '26', allegra: '23', navitor: '25', vitaflow: '24' },
+                                { size: '25', myval: '23/24.5', s3: '23', evolut: '26', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '27', myval: '26', s3: '26', evolut: '29', allegra: '31', navitor: '29', vitaflow: '27' }
+                            ]
+                        },
+                        { 
+                            subtypeName: { en: 'Fitline Aortic', es: 'Aórtica Fitline' }, 
+                            images: { main: 'assets/Bicarbon/bicarbon_fitline_main.png' }, 
+                            fluoroscopyDesc: {
+                                en: ["The ring and leaflets are radiopaque.", "Frontal view: its distinctive characteristic is a curved profile (which separates the valve orifice in three equivalent sections).", "Side view: Pathognomonic hazy appearance of the curved leaflets."],
+                                es: ["El anillo y las valvas son radiopacos.", "Vista frontal: su característica distintiva es un perfil curvo (que separa el orificio de la válvula en tres secciones equivalentes).", "Vista lateral: Apariencia nebulosa patognomónica de las valvas curvas."]
+                            },
+                            fluoroscopyImages: ['https://placehold.co/400x300/93c5fd/000000?text=IMAGE+8'],
+                            positioning: positioning_General,
+                            positioningImages: ['https://placehold.co/400x300/a3e635/000000?text=IMAGE+9'],
+                            specs: [ { size: 17, model: 'ICV0536', tad: 17.2, id: 13.0, oho: 6.0, goa: 1.24 }, { size: 19, model: 'ICV0538', tad: 19.2, id: 15.0, oho: 6.8, goa: 1.63 }, { size: 21, model: 'ICV0540', tad: 21.5, id: 17.0, oho: 7.2, goa: 2.15 }, { size: 23, model: 'ICV0542', tad: 23.5, id: 19.0, oho: 7.6, goa: 2.70 }, { size: 25, model: 'ICV0544', tad: 25.0, id: 20.5, oho: 8.0, goa: 3.16 }, { size: 27, model: 'ICV0546', tad: 27.0, id: 22.5, oho: 8.6, goa: 3.82 } ],
+                            taviTable: [
+                                { size: '19', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: 'Caution', navitor: 'Caution', vitaflow: 'Caution' },
+                                { size: '21', myval: 'Caution', s3: 'Caution', evolut: 'Caution', allegra: '23', navitor: 'Caution', vitaflow: '21' },
+                                { size: '23', myval: '20/21.5', s3: '20', evolut: '23', allegra: '23', navitor: '23', vitaflow: '21' },
+                                { size: '25', myval: '21.5', s3: '23', evolut: '26', allegra: '23', navitor: '25', vitaflow: '24' },
+                                { size: '27', myval: '23/24.5', s3: '23', evolut: '26', allegra: '27', navitor: '25/27', vitaflow: '24/27' },
+                                { size: '29', myval: '26', s3: '26', evolut: '29', allegra: '31', navitor: '29', vitaflow: '27' },
+                                { size: '31', myval: '26', s3: '26', evolut: '29', allegra: '31', navitor: '29', vitaflow: '27' }
+                            ]
+                        }
+                    ],
+                    mitral: [
+                        { subtypeName: {en: 'Bicarbon Fitline Mitral', es: 'Bicarbon Fitline Mitral'}, images: { main: 'assets/Bicarbon/bicarbon_fitline_mitral_main.png'}, specs: [ { size: 25, tad: 25, goa: 4.2, id: 21.0 }, { size: 27, tad: 27, goa: 5.0, id: 23.0 }, { size: 29, tad: 29, goa: 5.9, id: 25.0 }, { size: 31, tad: 31, goa: 6.9, id: 27.0 }, { size: 33, tad: 33, goa: 8.0, id: 29.0 } ] }
+                    ]
+                }
+            },
+            {
+                id: 'jyros', name: 'Jyros', manufacturer: 'Jyros Medical',
+                positions: {
+                    aortic: [ { subtypeName: { en: 'Standard Aortic', es: 'Aórtica Estándar' }, images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=Jyros' }, specs: [ { size: 19, tad: 19.0, id: 15.0, oho: 6.5, goa: 1.77 }, { size: 21, tad: 21.0, id: 17.0, oho: 7.0, goa: 2.27 }, { size: 23, tad: 23.0, id: 19.0, oho: 7.5, goa: 2.84 }, { size: 25, tad: 25.0, id: 21.0, oho: 8.0, goa: 3.46 }, { size: 27, tad: 27.0, id: 23.0, oho: 8.5, goa: 4.15 } ] } ],
+                    mitral: []
+                }
+            },
+            {
+                id: 'edwards-duromedics', name: 'Edwards Duromedics', manufacturer: 'Edwards Lifesciences',
+                positions: {
+                    aortic: [ { subtypeName: { en: 'Standard Aortic', es: 'Aórtica Estándar' }, images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=Edwards+Duromedics' }, specs: [ { size: 19, tad: 19.0, id: 15.0, oho: 7.0, goa: 1.77 }, { size: 21, tad: 21.0, id: 17.0, oho: 7.5, goa: 2.27 }, { size: 23, tad: 23.0, id: 19.0, oho: 8.0, goa: 2.84 }, { size: 25, tad: 25.0, id: 21.0, oho: 8.5, goa: 3.46 }, { size: 27, tad: 27.0, id: 23.0, oho: 9.0, goa: 4.15 } ] } ],
+                    mitral: []
+                }
+            },
+            {
+                id: 'meril-miltonia', name: 'Meril Miltonia', manufacturer: 'Meril Life Sciences',
+                positions: {
+                    aortic: [ { subtypeName: { en: 'Standard Aortic', es: 'Aórtica Estándar' }, images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=Meril+Miltonia' }, specs: [ { size: 19, tad: 19.0, id: 15.5, oho: 6.8, goa: 1.89 }, { size: 21, tad: 21.0, id: 17.5, oho: 7.2, goa: 2.41 }, { size: 23, tad: 23.0, id: 19.5, oho: 7.8, goa: 2.99 }, { size: 25, tad: 25.0, id: 21.5, oho: 8.2, goa: 3.63 }, { size: 27, tad: 27.0, id: 23.5, oho: 8.8, goa: 4.34 } ] } ],
+                    mitral: []
+                }
+            },
+            {
+                id: 'hp-biplus', name: 'HP-Biplus', manufacturer: 'HP Medical',
+                positions: {
+                    aortic: [
+                        { subtypeName: { en: 'Standard Aortic', es: 'Aórtica Estándar' }, images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=HP-Biplus' }, specs: [ { size: 19, tad: 19.0, id: 15.2, oho: 6.7, goa: 1.81 }, { size: 21, tad: 21.0, id: 17.2, oho: 7.1, goa: 2.32 }, { size: 23, tad: 23.0, id: 19.2, oho: 7.6, goa: 2.90 }, { size: 25, tad: 25.0, id: 21.2, oho: 8.1, goa: 3.53 }, { size: 27, tad: 27.0, id: 23.2, oho: 8.6, goa: 4.23 } ] },
+                        { subtypeName: { en: 'HP-Biplus C', es: 'HP-Biplus C' }, images: { main: 'https://placehold.co/600x400/e8e8e8/333333?text=HP-Biplus+C' }, specs: [ { size: 19, tad: 19.0, id: 15.5, oho: 6.5, goa: 1.89 }, { size: 21, tad: 21.0, id: 17.5, oho: 7.0, goa: 2.41 }, { size: 23, tad: 23.0, id: 19.5, oho: 7.5, goa: 2.99 }, { size: 25, tad: 25.0, id: 21.5, oho: 8.0, goa: 3.63 }, { size: 27, tad: 27.0, id: 23.5, oho: 8.5, goa: 4.34 } ] }
+                    ],
+                    mitral: []
+                }
+            }
+        ];
+
+        // --- APPLICATION LOGIC ---
+        let currentLanguage = 'en';
+        const mainScreen = document.getElementById('main-screen');
+        const detailScreen = document.getElementById('detail-screen');
+        const brandListContainer = document.getElementById('brand-list');
+        const viewerImg = document.getElementById('viewer-img');
+        
+        const modals = {
+            image: document.getElementById('image-viewer'),
+            options: document.getElementById('options-menu'),
+            language: document.getElementById('language-modal'),
+            about: document.getElementById('about-modal'),
+            disclaimer: document.getElementById('disclaimer-modal'),
+            contact: document.getElementById('contact-modal'),
+            vivor: document.getElementById('vivor-modal'),
+        };
+
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            document.documentElement.lang = lang;
+            localStorage.setItem('valve-app-language', lang);
+            updateUIText();
+            
+            if (detailScreen.classList.contains('hidden')) {
+                displayBrandList();
+            } else {
+                const currentValveId = detailScreen.dataset.valveId;
+                if(currentValveId) showDetailScreen(currentValveId);
+            }
+        }
+
+        function updateUIText() {
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.dataset.langKey;
+                if (translations[currentLanguage]?.[key]) {
+                    el.innerHTML = translations[currentLanguage][key];
+                }
+            });
+        }
+        
+        function displayBrandList() {
+            brandListContainer.innerHTML = '';
+            valvesData.sort((a, b) => a.name.localeCompare(b.name)).forEach((brand, index) => {
+                const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500'];
+                const color = colors[index % colors.length];
+
+                const listItem = document.createElement('div');
+                listItem.className = 'bg-white p-4 md:p-5 rounded-xl shadow-md mb-3 lg:mb-0 flex items-center cursor-pointer transition transform hover:scale-105 active:scale-95';
+                listItem.innerHTML = `
+                    <div class="${color} rounded-lg p-3 md:p-4 mr-4">
+                        <svg class="w-6 h-6 md:w-8 md:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-lg md:text-xl text-gray-800">${brand.name}</h3>
+                        <p class="text-sm md:text-base text-gray-500">${brand.manufacturer}</p>
+                    </div>
+                `;
+                listItem.addEventListener('click', () => showDetailScreen(brand.id));
+                brandListContainer.appendChild(listItem);
+            });
+        }
+        
+        function showDetailScreen(brandId) {
+            const brand = valvesData.find(v => v.id === brandId);
+            if (!brand) return;
+
+            detailScreen.dataset.valveId = brandId;
+            mainScreen.classList.add('slide-out');
+            detailScreen.classList.remove('hidden');
+
+            const hasAortic = brand.positions.aortic && brand.positions.aortic.length > 0;
+            const hasMitral = brand.positions.mitral && brand.positions.mitral.length > 0;
+
+            const createPositionHTML = (positionData, positionName) => {
+                if (!positionData || positionData.length === 0) {
+                    const langKey = positionName === 'aortic' ? 'aortic_valves' : 'mitral_valves';
+                    return `<div class="p-4 bg-white rounded-lg shadow-sm"><p class="text-gray-500">No ${translations[currentLanguage][langKey].toLowerCase()} models available.</p></div>`;
+                }
+
+                if (positionData.length === 1) {
+                    return renderSubtype(positionData[0]);
+                }
+
+                const subtypeButtons = positionData.map((subtype, index) => `
+                    <button 
+                        class="subtype-selector flex-grow px-3 py-2 text-sm font-medium text-center border rounded-lg transition-colors focus:outline-none ${index === 0 ? 'active' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}"
+                        data-position="${positionName}" 
+                        data-index="${index}"
+                    >
+                        ${subtype.subtypeName[currentLanguage]}
+                    </button>
+                `).join('');
+
+                return `
+                    <div class="flex flex-wrap items-stretch justify-center gap-2 mb-4">${subtypeButtons}</div>
+                    <div id="${positionName}-details-container">${renderSubtype(positionData[0])}</div>
+                `;
+            };
+
+            const aorticContent = createPositionHTML(brand.positions.aortic, 'aortic');
+            const mitralContent = createPositionHTML(brand.positions.mitral, 'mitral');
+
+            detailScreen.innerHTML = `
+                <header class="bg-indigo-800 text-white p-5 shadow-lg lg:rounded-t-xl flex items-center">
+                    <button id="back-button" class="mr-4 bg-white/20 hover:bg-white/30 rounded-full p-2 transition-all duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-bold">${brand.name}</h1>
+                        <p class="text-sm md:text-base opacity-80">${brand.manufacturer}</p>
+                    </div>
+                </header>
+                <main class="main-content">
+                    <div class="bg-gray-100 p-2 sticky top-0 z-10 flex justify-center gap-4 border-b">
+                        ${hasAortic ? `<button class="position-selector px-4 py-2 text-gray-600 font-medium active" data-position="aortic" data-lang-key="aortic_valves">${translations[currentLanguage].aortic_valves}</button>` : ''}
+                        ${hasMitral ? `<button class="position-selector px-4 py-2 text-gray-600 font-medium" data-position="mitral" data-lang-key="mitral_valves">${translations[currentLanguage].mitral_valves}</button>` : ''}
+                    </div>
+                    <div class="p-4 md:p-6">
+                        <div id="aortic-content">${aorticContent}</div>
+                        <div id="mitral-content" class="hidden">${mitralContent}</div>
+                    </div>
+                </main>
+            `;
+            
+            setupDetailScreenListeners();
+        }
+
+        // --- RENDERIZADO DE LAS NUEVAS SECCIONES ---
+        function renderSubtype(subtype) {
+            const headers = subtype.specs.length > 0 ? Object.keys(subtype.specs[0]) : [];
+            
+            // 1. Identificación Fluoroscópica (con imágenes y VÍDEOS)
+            let fluoroHTML = '';
+            if (subtype.fluoroscopyDesc) {
+                let fluoroImgs = '';
+                if (subtype.fluoroscopyImages && subtype.fluoroscopyImages.length > 0) {
+                    fluoroImgs = `
+                        <div class="mt-4 flex gap-4 overflow-x-auto pb-2">
+                            ${subtype.fluoroscopyImages.map(img => {
+                                if(img.toLowerCase().endsWith('.mp4')) {
+                                    return `<video src="${img}" controls class="inline-clinical-img cursor-default" style="max-height: 160px; border-radius: 0.5rem; background: black;"></video>`;
+                                } else {
+                                    return `<img src="${img}" alt="Fluoroscopy" class="inline-clinical-img gallery-image" data-image="${img}">`;
+                                }
+                            }).join('')}
+                        </div>
+                    `;
+                }
+                fluoroHTML = `
+                    <div class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                        <h4 class="text-lg font-medium mb-2 text-blue-800" data-lang-key="fluoro_id">${translations[currentLanguage].fluoro_id}</h4>
+                        <ul class="list-disc list-inside text-gray-700 text-sm md:text-base space-y-1">
+                            ${subtype.fluoroscopyDesc[currentLanguage].map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                        ${fluoroImgs}
+                    </div>
+                `;
+            }
+
+            // 2. Posicionamiento de la Válvula (con imágenes y VÍDEOS)
+            let positioningHTML = '';
+            if (subtype.positioning) {
+                let posImgs = '';
+                if (subtype.positioningImages && subtype.positioningImages.length > 0) {
+                    posImgs = `
+                        <div class="mt-4 flex gap-4 overflow-x-auto pb-2">
+                            ${subtype.positioningImages.map(media => {
+                                if(media.toLowerCase().endsWith('.mp4')) {
+                                    return `<video src="${media}" controls class="inline-clinical-img cursor-default" style="max-height: 160px; border-radius: 0.5rem; background: black;"></video>`;
+                                } else {
+                                    return `<img src="${media}" alt="Positioning" class="inline-clinical-img gallery-image" data-image="${media}">`;
+                                }
+                            }).join('')}
+                        </div>
+                    `;
+                }
+                positioningHTML = `
+                    <div class="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                        <h4 class="text-lg font-medium mb-2 text-green-800" data-lang-key="positioning">${translations[currentLanguage].positioning}</h4>
+                        <ul class="list-disc list-inside text-gray-700 text-sm md:text-base space-y-1">
+                            ${subtype.positioning[currentLanguage].map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                        ${posImgs}
+                    </div>
+                `;
+            }
+
+            // 3. Tabla TAVI
+            let taviHTML = '';
+            if (subtype.taviTable && subtype.taviTable.length > 0) {
+                const taviHeaders = ['size', 'myval', 's3', 'evolut', 'allegra', 'navitor', 'vitaflow'];
+                taviHTML = `
+                    <div class="mt-8 mb-4 border rounded-lg overflow-hidden shadow-sm">
+                        <div class="bg-orange-500 text-white px-4 py-3">
+                            <h4 class="text-lg font-semibold" data-lang-key="tavi_selection">${translations[currentLanguage].tavi_selection}</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="specs-table m-0 whitespace-nowrap text-center">
+                                <thead>
+                                    <tr>${taviHeaders.map(key => `<th class="text-center">${translations[currentLanguage]['tavi_' + key] || key.toUpperCase()}</th>`).join('')}</tr>
+                                </thead>
+                                <tbody>
+                                    ${subtype.taviTable.map(row => `<tr>${taviHeaders.map(h => {
+                                        const val = row[h];
+                                        const isCaution = val && val.toString().includes('Caution');
+                                        return `<td class="${isCaution ? 'text-orange-600 font-medium' : ''}">${val}</td>`;
+                                    }).join('')}</tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="mb-8 p-4 border rounded-xl shadow-sm bg-white animate-fade-in">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-800">${subtype.subtypeName[currentLanguage]}</h3>
+                    
+                    <!-- Imágenes Generales / Diseño (con soporte de VÍDEO) -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-medium mb-3 text-gray-700" data-lang-key="details_images">${translations[currentLanguage].details_images}</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            ${Object.entries(subtype.images).map(([key, url]) => {
+                                if(url.toLowerCase().endsWith('.mp4')) {
+                                    return `<video src="${url}" controls class="w-full h-auto rounded-lg shadow-md object-cover aspect-video bg-black"></video>`;
+                                } else {
+                                    return `<img src="${url}" alt="${key}" class="gallery-image w-full h-auto rounded-lg shadow-md cursor-pointer object-cover aspect-video bg-gray-200" data-image="${url}" onerror="this.src='https://placehold.co/600x400/e8e8e8/333333?text=Image+Not+Found'">`;
+                                }
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    ${fluoroHTML}
+
+                    <div class="mt-6">
+                        <h4 class="text-lg font-medium mb-3 text-gray-700" data-lang-key="details_specs">${translations[currentLanguage].details_specs}</h4>
+                        <div class="overflow-x-auto">
+                            <table class="specs-table">
+                                <thead><tr>${headers.map(key => `<th>${translations[currentLanguage]['header_' + key] || key.toUpperCase()}</th>`).join('')}</tr></thead>
+                                <tbody>${subtype.specs.map(spec => `<tr>${headers.map(h => `<td>${spec[h] === undefined ? '' : spec[h]}</td>`).join('')}</tr>`).join('')}</tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    ${taviHTML}
+                    ${positioningHTML}
+                </div>
+            `;
+        }
+
+        function setupDetailScreenListeners() {
+            document.getElementById('back-button').addEventListener('click', () => {
+                detailScreen.classList.add('hidden');
+                mainScreen.classList.remove('slide-out');
+                detailScreen.removeAttribute('data-valve-id');
+            });
+
+            document.querySelectorAll('.position-selector').forEach(selector => {
+                selector.addEventListener('click', (e) => {
+                    const position = e.target.dataset.position;
+                    document.querySelectorAll('.position-selector').forEach(s => s.classList.remove('active'));
+                    e.target.classList.add('active');
+
+                    document.getElementById('aortic-content').classList.toggle('hidden', position !== 'aortic');
+                    document.getElementById('mitral-content').classList.toggle('hidden', position !== 'mitral');
+                });
+            });
+
+            const setupImageViewer = (container) => {
+                 container.querySelectorAll('.gallery-image').forEach(img => {
+                    img.addEventListener('click', (e) => {
+                        viewerImg.src = e.target.dataset.image;
+                        modals.image.classList.add('visible');
+                    });
+                });
+            };
+            
+            setupImageViewer(detailScreen);
+
+            document.querySelectorAll('.subtype-selector').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const targetButton = e.currentTarget;
+                    const position = targetButton.dataset.position;
+                    const index = parseInt(targetButton.dataset.index, 10);
+                    const brandId = detailScreen.dataset.valveId;
+                    const brand = valvesData.find(v => v.id === brandId);
+
+                    if (!brand) return;
+                    const subtypeData = brand.positions[position]?.[index];
+                    if (!subtypeData) return;
+
+                    document.querySelectorAll(`.subtype-selector[data-position="${position}"]`).forEach(btn => {
+                        btn.classList.remove('active');
+                        btn.classList.add('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-50');
+                    });
+                    targetButton.classList.add('active');
+                    targetButton.classList.remove('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-50');
+
+                    const container = document.getElementById(`${position}-details-container`);
+                    if (container) {
+                        container.innerHTML = renderSubtype(subtypeData);
+                        setupImageViewer(container);
+                    }
+                });
+            });
+        }
+        
+        function calculateAndDisplayViVor() {
+            const input = document.getElementById('vivor-input');
+            const resultsContainer = document.getElementById('vivor-results');
+            const diameter = parseFloat(input.value);
+            const selectedPosition = document.querySelector('input[name="vivor-position"]:checked').value;
+
+            if (isNaN(diameter) || diameter <= 0) {
+                resultsContainer.innerHTML = '';
+                return;
+            }
+
+            const suitableValves = [];
+            valvesData.forEach(brand => {
+                const positionData = brand.positions[selectedPosition];
+                if (positionData) {
+                    positionData.forEach(subtype => {
+                        subtype.specs.forEach(spec => {
+                            if (spec.id && spec.id >= diameter) {
+                                suitableValves.push({
+                                    brand: brand.name,
+                                    subtype: subtype.subtypeName[currentLanguage],
+                                    position: selectedPosition,
+                                    ...spec
+                                });
+                            }
+                        });
+                    });
+                }
+            });
+
+            if (suitableValves.length === 0) {
+                resultsContainer.innerHTML = `<p class="text-center text-gray-500" data-lang-key="vivor_no_results">${translations[currentLanguage].vivor_no_results}</p>`;
+            } else {
+                suitableValves.sort((a, b) => (a.id - diameter) - (b.id - diameter));
+
+                const resultsHTML = `
+                    <h3 class="text-lg font-semibold mb-3" data-lang-key="vivor_results_title">${translations[currentLanguage].vivor_results_title}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="specs-table">
+                            <thead>
+                                <tr>
+                                    <th>${translations[currentLanguage].header_brand}</th>
+                                    <th>${translations[currentLanguage].header_model}</th>
+                                    <th>${translations[currentLanguage].header_size}</th>
+                                    <th>${translations[currentLanguage].header_id}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${suitableValves.map((v, index) => `
+                                    <tr class="${index === 0 ? 'best-candidate' : ''}">
+                                        <td>${v.brand}</td>
+                                        <td>${v.subtype}</td>
+                                        <td>${v.size}</td>
+                                        <td>${v.id} mm</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                resultsContainer.innerHTML = resultsHTML;
+            }
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('options-menu-button').addEventListener('click', () => modals.options.classList.add('visible'));
+
+            document.getElementById('vivor-button').addEventListener('click', () => {
+                modals.options.classList.remove('visible');
+                modals.vivor.classList.add('visible');
+            });
+
+            document.getElementById('vivor-calculate-btn').addEventListener('click', calculateAndDisplayViVor);
+
+            document.getElementById('lang-button').addEventListener('click', () => {
+                modals.options.classList.remove('visible');
+                modals.language.classList.add('visible');
+            });
+            document.querySelectorAll('.lang-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    setLanguage(e.target.dataset.lang);
+                    modals.language.classList.remove('visible');
+                });
+            });
+
+            document.getElementById('about-button').addEventListener('click', () => {
+                modals.options.classList.remove('visible');
+                modals.about.classList.add('visible');
+            });
+            document.getElementById('disclaimer-button').addEventListener('click', () => {
+                modals.options.classList.remove('visible');
+                modals.disclaimer.classList.add('visible');
+            });
+             document.getElementById('contact-button').addEventListener('click', () => {
+                modals.options.classList.remove('visible');
+                modals.contact.classList.add('visible');
+            });
+
+            Object.values(modals).forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.classList.remove('visible');
+                    }
+                });
+            });
+        }
+
+        function initApp() {
+            const savedLang = localStorage.getItem('valve-app-language') || 'en';
+            setLanguage(savedLang);
+            displayBrandList();
+            setupEventListeners();
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
